@@ -1,3 +1,10 @@
+# TODO
+## clean up code, 
+## make it more dynamic than what it already is 
+## make the script look for a stream on it's own, see how onurhb implemented it in c# with dotnet core.
+## research about how to decrypt stream with pycrypto
+
+
 from datetime import datetime
 
 import requests
@@ -17,7 +24,7 @@ urllib3.disable_warnings()
 # the streams are used for testing purposes only.
 #subject = "is214"
 #baseUrl = "https://live.uia.no/live/ngrp:{0}_all/".format(subject)
-baseUrl = "https://httpcache0-47115-httpcache0.dna.qbrick.com/47115-cachelive0/21/0/hls/nrk1/"
+#baseUrl = "https://httpcache0-47115-httpcache0.dna.qbrick.com/47115-cachelive0/21/0/hls/nrk1/"
 #baseUrl = "https://nrk-live-no.telenorcdn.net/21/0/hls/nrk1/playlist.m3u8"
 #baseUrl = "https://nrk-nrk2.akamaized.net/22/0/hls/nrk2/"
 baseUrl = "https://nrk-live-no.telenorcdn.net/21/0/hls/nrk1/"
@@ -41,7 +48,7 @@ def ehhh_encryption_what(url):
 	# The value is a hexadecimal-sequence that specifies a 128-bit
 	# unsigned integer Initialization Vector to be used with the key.
 	iv = re.findall(re.compile(ur'(IV=\S+)'), getStream(url).text)[0]
-
+	return "{0} \n{1} \n{2}".format(method, keyUri, iv)
 
 
 
@@ -73,30 +80,46 @@ def dotTS_merger(fileName):
 			with open(vids, 'rb') as mergeFile:
 				shutil.copyfileobj(mergeFile, filename)
 
-def m3u8_parser(resolution,fps,debug=False):
+def decryptDownloads(url):
+	# use pycrypto to encrypt the content inside the .ts files.
+	# then just download with 
+	#with open(urls[:37], 'wb+') as file:						
+	#	shutil.copyfileobj(getStream("/".join(baseUrl.split('/')[:8])+"/"+urls, True).raw, file)
+	#return "{:s}".format(urls)
+	pass
 
-	segments = ""
+def download(urls):
+	with open(urls[:37], 'wb+') as file:						
+		shutil.copyfileobj(getStream("/".join(baseUrl.split('/')[:8])+"/"+urls, True).raw, file)
+	return "{:s}".format(urls)
+
+def m3u8_parser(resolution,fps):
+
 	playlist = re.findall(re.compile(ur'#EXT-X-STREAM-INF:[A-Z=0-9,\"x\-.a-z \r\n#_]+'), getStream(baseUrl+"playlist.m3u8").text)
 	for entry in playlist:
 		if resolution in entry and fps in entry:	
 			segments = entry.split(',')[4].replace('mp4a.40.2"','').replace('#EXT-X-STREAM-INF','').strip() #going to switch out the replace statements with regex later.. just want to get this shit running
 			segmentsUrls = "/".join(baseUrl.split('/')[:8])+segments
+			print segmentsUrls
+			#encryptionState = ehhh_encryption_what(segmentsUrls)
+			#if encryptionState:
+				# print "We got Encrypted Streams\n activating decryption of streams"
+			# else:
+				# just continue statement, or just print that there's no encrypted streams.	
+				# make some of function call to see if it's true then "activate"
 			tsUrls = getStream(segmentsUrls).text.replace('\n','\r')
 			tsFiles = re.findall(re.compile(ur'([0-9-]+.ts\?version_hash=\d+\w{2})'), tsUrls)
 			for urls in tsFiles:
 				print urls
-				with open(urls[:37], 'wb+') as file:						
-					shutil.copyfileobj(getStream("/".join(baseUrl.split('/')[:8])+"/"+urls, True).raw, file)
-				print "{:s}".format(urls)
+				print download(urls)
 
-
-
-#if __name__ == '__main__':
+if __name__ == '__main__':
 	try:
 		if getStream(baseUrl+"playlist.m3u8").status_code == 200:
 			
 			try:
-				m3u8_parser(resolution[-1], fps[-1])
+				#m3u8_parser(resolution[-1], fps[-1])
+				m3u8_parser()
 
 			except TypeError:
 				print "Avaliable Stream Quality"
@@ -108,4 +131,5 @@ def m3u8_parser(resolution,fps,debug=False):
 			print "something fucked up"
 			sys.exit(1)
 	except KeyboardInterrupt: #so it will start merging what it downloaded so far, and then delete the other files.
-		dotTS_merger()
+		print "\n[+] Detected KeyboardInterrupt\nStarting Merging of .ts files\n"
+		dotTS_merger(baseUrl)
