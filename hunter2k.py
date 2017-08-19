@@ -69,6 +69,9 @@ try:
 	if getStream(baseUrl+"playlist.m3u8").status_code == 200:
 		
 		try:
+			# example
+			# you choose the quality according to the key in the listing.
+			# m3u8_parser(resolution[4], fps[4])
 			m3u8_parser()
 
 		except TypeError:
