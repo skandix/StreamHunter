@@ -1,58 +1,50 @@
-# TODO
-## clean up code, 
-## make it more dynamic than what it already is 
-## make the script look for a stream on it's own, see how onurhb implemented it in c# with dotnet core.
-## research about how to decrypt stream with pycrypto
-
-
 from datetime import datetime
+import requests, shutil, sys, re, os
 
-import requests
-import shutil
-import sys
-import re
-import os
+def UIA(subject:str) -> str:
+	"""
+	subject: str - is the course name one want to stream
+	returns, a compiled string for watching the livestream of the course.
 
-# just for supressing the warnings given.
-import urllib3
-urllib3.disable_warnings()
+	note: i think this is not a correct generic url for uia's livestreams
+	"""
+	return (f"https://live.uia.no/live/ngrp:{subject}_all/")
+	pass
 
-#parser
-#import argparser
-#parser = argparser.argparser()
+baseUrl = "https://nrk-nrk2.akamaized.net/22/0/hls/nrk2/"
+#baseUrl = "https://nrk-nrk1.akamaized.net/21/0/hls/nrk1/playlist.m3u8"
 
-# the streams are used for testing purposes only.
-#subject = "is214"
-#baseUrl = "https://live.uia.no/live/ngrp:{0}_all/".format(subject)
-#baseUrl = "https://httpcache0-47115-httpcache0.dna.qbrick.com/47115-cachelive0/21/0/hls/nrk1/"
-#baseUrl = "https://nrk-live-no.telenorcdn.net/21/0/hls/nrk1/playlist.m3u8"
-#baseUrl = "https://nrk-nrk2.akamaized.net/22/0/hls/nrk2/"
-baseUrl = "https://nrk-live-no.telenorcdn.net/21/0/hls/nrk1/"
-
-def getStream(url, stremState=False):
-	return requests.get(url, stream=stremState)
-
-resolution = re.findall(re.compile(ur'(RESOLUTION=\d{1,4}x\d{1,4})'), getStream(baseUrl+"playlist.m3u8").text)
-fps = re.findall(re.compile(ur'(FRAME-RATE=\d{2})'), getStream(baseUrl+"playlist.m3u8").text)
+def getStream(url:str, stream:bool=False) -> str:
+	if url.endswith('playlist.m3u8'):
+		return requests.get(url, stream=stream)
+	else:
+		return requests.get(url+"playlist.m3u8", stream=stream)
 
 
-def ehhh_encryption_what(url):
+
+resolution = re.findall(re.compile(r'(RESOLUTION=\d{1,4}x\d{1,4})'), getStream(baseUrl).text)
+fps = re.findall(re.compile(r'(FRAME-RATE=\d{2})'), getStream(baseUrl).text)
+
+
+def detect_encryption(url:str) -> str:
 
 	# encryption method
-	method = re.findall(re.compile(ur'(METHOD=[^,]+)'), getStream(url).text)[0]
+	print(getStream(url).text)
+	method = re.findall(re.compile(r'(METHOD=[^,]+)'), getStream(url).text)
 
 	# The value is a quoted-string containing a URI that specifies how to obtain the key
 	# This attribute is REQUIRED unless the METHOD is NONE.
-	keyUri = re.findall(re.compile(ur'(URI=[^,]+)'), getStream(url).text)[0]
+	keyUri = re.findall(re.compile(r'(URI=[^,]+)'), getStream(url).text)
 
 	# The value is a hexadecimal-sequence that specifies a 128-bit
 	# unsigned integer Initialization Vector to be used with the key.
-	iv = re.findall(re.compile(ur'(IV=\S+)'), getStream(url).text)[0]
+	# aa = 1 byte
+	iv = re.findall(re.compile(r'(IV=\S+)'), getStream(url).text)
 	return "{0} \n{1} \n{2}".format(method, keyUri, iv)
 
 
 
-def dotTS_merger(fileName):
+def dotTS_merger(fileName:str):
 	dotTS = []
 	unSorted = []
 	
@@ -65,71 +57,86 @@ def dotTS_merger(fileName):
 			sSortedList = sorted(dotTS)
 
 	for k, v in enumerate(unSorted):
+		print(k,v)
 		if v == sSortedList[k]:
 			#return "O.K!"
 			continue
 
 		else:
-			print "Does not look good, make issue at github."
+			print ("Does not look good, make issue at github.")
 			break
 
 			#something is not rigth here...
 	with open(fileName+'.ts', 'wb') as filename:
 		for vids in sSortedList:
-			print vids
+			print (vids)
 			with open(vids, 'rb') as mergeFile:
 				shutil.copyfileobj(mergeFile, filename)
 
-def decryptDownloads(url):
-	# use pycrypto to encrypt the content inside the .ts files.
-	# then just download with 
-	#with open(urls[:37], 'wb+') as file:						
-	#	shutil.copyfileobj(getStream("/".join(baseUrl.split('/')[:8])+"/"+urls, True).raw, file)
-	#return "{:s}".format(urls)
+def decryptDownloads(url:str ):
+	"""
+	Use pycrypto to encrypt the content inside the .ts files.
+	then just download with 
+	
+	with open(urls[:37], 'wb+') as file:						
+		shutil.copyfileobj(getStream("/".join(baseUrl.split('/')[:8])+"/"+urls, True).raw, file)
+	return "{:s}".format(urls)
+	---
+	#EXT-X-KEY:METHOD=AES-128,URI="keys/1.key",IV=0x865832653759693f5f5ad4df269caaad
+	curl https://nrk-nrk1.akamaized.net/21/0/hls/nrk1/keys/1.key
+	keys/1.key is appended on the baseURL without the playlist.m3u8 on the end
+	loot = (requests.get("https://nrk-nrk1.akamaized.net/21/0/hls/nrk1/keys/1.key").text).encode('utf-8')
+	print(loot.hex())
+
+	this in acording to the IV is used to decrypt the stream
+
+	"""
 	pass
 
-def download(urls):
+def download(urls:str ):
 	with open(urls[:37], 'wb+') as file:						
 		shutil.copyfileobj(getStream("/".join(baseUrl.split('/')[:8])+"/"+urls, True).raw, file)
 	return "{:s}".format(urls)
 
-def m3u8_parser(resolution,fps):
+def m3u8_parser(resolution:int ,fps:int) -> str:
 
-	playlist = re.findall(re.compile(ur'#EXT-X-STREAM-INF:[A-Z=0-9,\"x\-.a-z \r\n#_]+'), getStream(baseUrl+"playlist.m3u8").text)
+	print(f"{getStream(baseUrl).text}\n\n")
+
+	playlist = re.findall(re.compile(r'#EXT-X-STREAM-INF:([^\?]+)'), getStream(baseUrl).text)
 	for entry in playlist:
-		if resolution in entry and fps in entry:	
-			segments = entry.split(',')[4].replace('mp4a.40.2"','').replace('#EXT-X-STREAM-INF','').strip() #going to switch out the replace statements with regex later.. just want to get this shit running
-			segmentsUrls = "/".join(baseUrl.split('/')[:8])+segments
-			print segmentsUrls
-			#encryptionState = ehhh_encryption_what(segmentsUrls)
-			#if encryptionState:
-				# print "We got Encrypted Streams\n activating decryption of streams"
-			# else:
-				# just continue statement, or just print that there's no encrypted streams.	
-				# make some of function call to see if it's true then "activate"
-			tsUrls = getStream(segmentsUrls).text.replace('\n','\r')
-			tsFiles = re.findall(re.compile(ur'([0-9-]+.ts\?version_hash=\d+\w{2})'), tsUrls)
-			for urls in tsFiles:
-				print urls
-				print download(urls)
+		if resolution in entry and fps in entry:
+			#print(entry)
+			playlistEnd = re.findall(re.compile(r'([\d{,10}\-]+\-\w{,10}[\.m3u8]+)'),entry)[0]
+			playlistStart = "/".join(baseUrl.split('/')[:8])
+			playlistURL = playlistStart+playlistEnd
+			print (playlistURL)
+			print (detect_encryption(playlistURL))
+
+
+			#tsUrls = getStream().text.replace('\n','\r')
+			#tsFiles = re.findall(re.compile(r'([0-9-]+.ts\?version_hash=\d+\w{2})'), tsUrls)
+			#for urls in tsFiles:
+			#	print (urls)
+			#	print (download(urls))
+			
 
 if __name__ == '__main__':
 	try:
-		if getStream(baseUrl+"playlist.m3u8").status_code == 200:
+		if getStream(baseUrl).ok:
 			
 			try:
-				#m3u8_parser(resolution[-1], fps[-1])
-				m3u8_parser()
+				m3u8_parser(resolution[-1], fps[-1])
+				#m3u8_parser()
 
 			except TypeError:
-				print "Avaliable Stream Quality"
-				for k,v in enumerate(resolution):
-					print "\t[{0}] {1} - {2}".format(k,v, fps[k])
-				print "Please select a quality profile"
+				print ("Avaliable Stream Quality")
+				for idx, quality_string in enumerate(resolution):
+					print (f"\t[{idx}] {quality_string} - {fps[idx]}")
+				print ("Please select a quality profile")
 
 		else:
-			print "something fucked up"
+			print ("something fucked up")
 			sys.exit(1)
-	except KeyboardInterrupt: #so it will start merging what it downloaded so far, and then delete the other files.
-		print "\n[+] Detected KeyboardInterrupt\nStarting Merging of .ts files\n"
+	except KeyboardInterrupt:
+		print ("\n[+] Detected KeyboardInterrupt\nStarting Merging of .ts files\n")
 		dotTS_merger(baseUrl)
